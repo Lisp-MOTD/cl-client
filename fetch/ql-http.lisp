@@ -6,8 +6,8 @@
   (handler-case
       (multiple-value-bind (headers filename)
           (ql-http:fetch url filename
-                         :if-exists :overwrite
-                         :maximum-redirects 2)
+                         :maximum-redirects 2
+                         :quietly t)
         (declare (ignore headers filename))
         success)
     (ql-http:unexpected-http-status (err)

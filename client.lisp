@@ -1,8 +1,13 @@
 
 (in-package :motd)
 
-(defvar *motd-url* "http://nklein.com/motd")
+(defparameter *preferred-languages* '(:en :fr :es :de :ja :zh))
 
+(defvar *motd-url* "http://motd.lisp.org/motds/most-recent")
+
+;;; This is :latin1 right now because that is what portable AllegroServe
+;;; writes when not running under Allegro.
+(defconstant +cache-external-format+ :latin1)
 (defvar *local-cache* (merge-pathnames ".lisp-motd"
                                        (user-homedir-pathname)))
 (defvar *cache-expiry* (hours 12))
@@ -44,18 +49,13 @@
   (when (cache-exists-p)
     (delete-file *local-cache*)))
 
-(defun write-cache-file (contents)
-  (with-open-file (*standard-output* (cache-backup-name)
-                                     :direction :output
-                                     :if-exists :supersede
-                                     :if-does-not-exist :create)
-    (write contents)))
-
 (defun load-cache ()
   (restore-cache-from-backup)
   (let ((*read-eval* nil))
     (with-open-file (*standard-input* *local-cache*
                                       :direction :input
+                                      :element-type 'character
+                                      :external-format +cache-external-format+
                                       :if-does-not-exist nil)
       (read *standard-input* nil))))
 
@@ -96,20 +96,51 @@
      (or (load-cached-motds)
          (fetch-motds)))))
 
+(defun join-strings (items separator)
+  (apply #'concatenate 'string
+         (rest (loop :for item :in items
+                  :collecting separator
+                  :collecting item))))
+
+(defun print-tags (tags)
+  (let* ((str (join-strings (mapcar #'symbol-name tags) ","))
+         (pre-len (- 70 (length str))))
+    (fresh-line)
+    (write-string
+     (subseq
+      "----------------------------------------------------------------------"
+      0
+      (max 0 pre-len)))
+    (write-string (string-downcase str))
+    (write-string "--")
+    (terpri)))
+
 (defun print-motd-header ()
+  (fresh-line)
+  (write-string "Lisp Message of the Day")
+  (terpri)
   (write-string
-   "-Lisp-Message-of-the-Day------------------------------------------------")
+   "========================================================================")
   (terpri))
 
-(defun print-motd-separator ()
-  (write-string
-   "------------------------------------------------------------------------")
-  (terpri))
+(defun find-best-translation (translations)
+  (flet ((rank-language (language)
+           (or (position language *preferred-languages*)
+               (length *preferred-languages*))))
+    (or (track-best:with-track-best (:order-by-fn #'<
+                                                  :return-best t)
+          (dolist (translation translations)
+            (destructuring-bind (language . text) translation
+              (track-best:track text (rank-language language)))))
+        (cdr (first translations)))))
 
 (defun print-motd (motd)
-  (write-string motd)
-  (fresh-line)
-  (print-motd-separator))
+  (let* ((p-list (rest motd))
+         (translations (getf p-list :translations))
+         (tags (getf p-list :tags)))
+    (write-string (find-best-translation translations))
+    (terpri)
+    (print-tags tags)))
 
 (defun print-motds (display-at-most)
   (let* ((*standard-output* *terminal-io*)
@@ -120,9 +151,10 @@
                                          display-at-most))))
     (when motds
       (print-motd-header)
-      (mapcar #'print-motd motds)
+      (mapc #'print-motd motds)
       motds)))
 
 (defun motd (display-at-most)
   (unless (quietp)
-    (print-motds display-at-most)))
+    (print-motds display-at-most))
+  (values))

@@ -1,5 +1,13 @@
 ## Lisp Message of the Day (Common Lisp Client)
 
+### Caveat
+
+This code is not yet complete.  In particular, it tries to fetch
+data from a URL that is not yet being served.  Look for a big
+announcement on [Planet Lisp][pl].
+
+[pl]: http://planet.lisp.org/
+
 ### Overview
 
 During a panel discussion at [ILC 2014][ILC], there was some talk about

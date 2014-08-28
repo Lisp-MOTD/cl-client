@@ -6,7 +6,8 @@
   :version "0.1.20140817"
   :license "unlicense"
   :depends-on (#-quicklisp :drakma
-               :cl-algebraic-data-type)
+               :cl-algebraic-data-type
+               :track-best)
   :components ((:static-file "README.md")
                (:static-file "UNLICENSE")
                (:file "package")
