@@ -2,8 +2,10 @@
 (in-package :motd)
 
 (defparameter *preferred-languages* '(:en :fr :es :de :ja :zh))
+;(setf *preferred-languages* '(:fr :en :es :de :ja :zh))
 
 (defvar *motd-url* "http://motd.lisp.org/motds/most-recent")
+;(setf *motd-url* "http://localhost:8000/motds/most-recent")
 
 ;;; This is :latin1 right now because that is what portable AllegroServe
 ;;; writes when not running under Allegro.
@@ -34,9 +36,6 @@
       (delete-file new))
     (rename-file old new)))
 
-(defun rename-cache-to-backup ()
-  (careful-rename-file *local-cache* (cache-backup-name)))
-
 (defun restore-cache-from-backup ()
   (careful-rename-file (cache-backup-name) *local-cache*))
 
@@ -60,10 +59,12 @@
       (read *standard-input* nil))))
 
 (defun motds-if-enough (contents)
-  (when contents
-    (destructuring-bind (requested &rest motds) contents
-      (when (<= *messages-to-cache* requested)
-        motds))))
+  (if contents
+      (destructuring-bind (requested &rest motds) contents
+        (if (<= *messages-to-cache* requested)
+            (values motds requested)
+            (values nil 0)))
+      (values nil 0)))
 
 (defun load-cached-motds ()
   (motds-if-enough (load-cache)))
@@ -142,19 +143,21 @@
     (terpri)
     (print-tags tags)))
 
-(defun print-motds (display-at-most)
-  (let* ((*standard-output* *terminal-io*)
-         (*messages-to-cache* (max display-at-most *messages-to-cache*))
-         (all-motds (when (plusp display-at-most)
-                      (load-or-fetch-motds)))
-         (motds (subseq all-motds 0 (min (length all-motds)
-                                         display-at-most))))
-    (when motds
-      (print-motd-header)
-      (mapc #'print-motd motds)
-      motds)))
+(defun print-motds-to-string (display-at-most)
+  (with-output-to-string (*standard-output*)
+    (let* ((*messages-to-cache* (max display-at-most *messages-to-cache*))
+           (all-motds (when (plusp display-at-most)
+                        (load-or-fetch-motds)))
+           (motds (subseq all-motds 0 (min (length all-motds)
+                                           display-at-most))))
+      (when motds
+        (print-motd-header)
+        (mapc #'print-motd motds)
+        motds))))
 
 (defun motd (display-at-most)
   (unless (quietp)
-    (print-motds display-at-most))
+    (let ((output (print-motds-to-string display-at-most)))
+      (when (plusp (length output))
+        (print-respecting-repl output))))
   (values))
