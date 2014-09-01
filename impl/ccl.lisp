@@ -24,7 +24,10 @@ would have set those flags."
   "When this variable is non-NIL, it will be printed after the next
   REPL eval.")
 
-(defun print-respecting-repl (string)
+(defvar *motd-print-hook* nil
+  "When the *MOTD-TO-PRINT* has been printed, invoke this hook")
+
+(defun print-respecting-repl (string &optional print-hook)
   "The default PRINT-RESPECTING-REPL just prints now because barring
   more information about the implementation, we cannot be careful to
   print at just the right spot in the REPL loop."
@@ -33,7 +36,10 @@ would have set those flags."
              (fresh-line *terminal-io*)
              (write-string *motd-to-print* *terminal-io*)))
          (unregister ()
-           (setf *motd-to-print* nil)
+           (when *motd-print-hook*
+             (funcall *motd-print-hook*))
+           (setf *motd-to-print* nil
+                 *motd-print-hook* nil)
            (ccl:unadvise ccl::toplevel-eval
                          :when :after
                          :name :motd-print-respecting-repl)
@@ -41,7 +47,8 @@ would have set those flags."
            (ccl:unadvise swank::eval-region
                          :when :after
                          :name :motd-print-respecting-repl)))
-    (setf *motd-to-print* string)
+    (setf *motd-to-print* string
+          *motd-print-hook* print-hook)
     (ccl:advise ccl::toplevel-eval
                 (progn
                   (print-it)
