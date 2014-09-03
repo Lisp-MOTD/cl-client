@@ -9,7 +9,7 @@
 
 ;;; This is :latin1 right now because that is what portable AllegroServe
 ;;; writes when not running under Allegro.
-(defconstant +cache-external-format+ :latin1)
+(defconstant +cache-external-format+ :utf-8)
 (defvar *local-cache* (merge-pathnames ".lisp-motd"
                                        (user-homedir-pathname)))
 (defvar *cache-expiry* (hours 12))
@@ -163,10 +163,13 @@
                      (output (print-motds-to-string display-at-most))
                      (thread (bt:current-thread)))
                  (when (plusp (length output))
-                   (print-respecting-repl output
-                                          (lambda ()
-                                            (unless (eq (bt:current-thread)
-                                                        thread)
-                                              (bt:join-thread thread))))))))
-        (bt:make-thread #'retrieve-thread :name "MOTD: RETRIEVE-THREAD"))))
+                   (print-respecting-repl
+                    output
+                    (lambda ()
+                      (unless (eq (bt:current-thread)
+                                  thread)
+                        (bt:join-thread thread))))))))
+        (if bt:*supports-threads-p*
+            (bt:make-thread #'retrieve-thread :name "MOTD: RETRIEVE-THREAD")
+            (retrieve-thread)))))
   (values))
