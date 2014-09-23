@@ -155,21 +155,47 @@
         (mapc #'print-motd motds)
         motds))))
 
-(defun motd (display-at-most)
-  (unless (quietp)
+(defun motd (&key
+               (display-at-most *messages-to-cache*)
+               (wait nil)
+               (force nil))
+  "Display the DISPLAY-AT-MOST most recent messages of the day.
+
+This function runs in a separate thread (when threads are available)
+and tries to print the message of the day at the REPL at a point where
+it makes sense to do so.  To override this behavior, pass in a non-NIL
+WAIT parameter.
+
+This function will not print the message of the day if it determines
+that the Lisp image was started in a mode where extraneous terminal
+output is undesirable.  To override this behavior, pass in a non-NIL
+FORCE parameter."
+  (when (or force
+            (not (quietp)))
     (let ((terminal-io *terminal-io*))
-      (flet ((retrieve-thread ()
-               (let ((*terminal-io* terminal-io)
-                     (output (print-motds-to-string display-at-most))
-                     (thread (bt:current-thread)))
-                 (when (plusp (length output))
+      (labels ((immediate-print (output)
+                 (fresh-line *terminal-io*)
+                 (write-string output *terminal-io*))
+
+               (delayed-print (output)
+                 (let ((thread (bt:current-thread)))
                    (print-respecting-repl
                     output
                     (lambda ()
                       (unless (eq (bt:current-thread)
                                   thread)
-                        (bt:join-thread thread))))))))
-        (if bt:*supports-threads-p*
+                        (bt:join-thread thread))))))
+
+               (retrieve-thread (&optional wait)
+                 (let ((*terminal-io* terminal-io)
+                       (output (print-motds-to-string display-at-most)))
+                   (when (plusp (length output))
+                     (if wait
+                         (immediate-print output)
+                         (delayed-print output))))))
+
+        (if (and bt:*supports-threads-p*
+                 (not wait))
             (bt:make-thread #'retrieve-thread :name "MOTD: RETRIEVE-THREAD")
-            (retrieve-thread)))))
+            (retrieve-thread t)))))
   (values))
