@@ -13,6 +13,7 @@
 (defvar *local-cache* (merge-pathnames ".lisp-motd"
                                        (user-homedir-pathname)))
 (defvar *cache-expiry* (hours 12))
+;(setf *cache-expiry* (seconds 1))
 (defvar *messages-to-cache* 10)
 
 (defun cache-exists-p ()
@@ -135,6 +136,11 @@
               (track-best:track text (rank-language language)))))
         (cdr (first translations)))))
 
+(defun get-tags (motd)
+  (let* ((p-list (rest motd))
+         (tags (getf p-list :tags)))
+    tags))
+
 (defun print-motd (motd)
   (let* ((p-list (rest motd))
          (translations (getf p-list :translations))
@@ -143,11 +149,13 @@
     (terpri)
     (print-tags tags)))
 
-(defun print-motds-to-string (display-at-most)
+(defun print-motds-to-string (display-at-most show-message-p-fn)
   (with-output-to-string (*standard-output*)
     (let* ((*messages-to-cache* (max display-at-most *messages-to-cache*))
-           (all-motds (when (plusp display-at-most)
-                        (load-or-fetch-motds)))
+           (all-motds (remove-if-not show-message-p-fn
+                                     (when (plusp display-at-most)
+                                       (load-or-fetch-motds))
+                                     :key #'get-tags))
            (motds (subseq all-motds 0 (min (length all-motds)
                                            display-at-most))))
       (when motds
@@ -157,9 +165,20 @@
 
 (defun motd (&key
                (display-at-most *messages-to-cache*)
+               (show-message-p-fn (constantly t))
                (wait nil)
                (force nil))
   "Display the DISPLAY-AT-MOST most recent messages of the day.
+
+If the SHOW-MESSAGE-P-FN is specified, it will be called for each
+message.  It will be passed one parameter which is the list of tags
+for this message.  If the function returns NIL, the message will not
+be displayed.  For example, if you only want to see messages that are
+tagged as QUICKLISP or SBCL, you might specify:
+
+    (motd:motd :show-message-p-fn (lambda (tags)
+                                     (or (member :quicklisp tags)
+                                         (member :sbcl tags))))
 
 This function runs in a separate thread (when threads are available)
 and tries to print the message of the day at the REPL at a point where
@@ -188,7 +207,8 @@ FORCE parameter."
 
                (retrieve-thread (&optional wait)
                  (let ((*terminal-io* terminal-io)
-                       (output (print-motds-to-string display-at-most)))
+                       (output (print-motds-to-string display-at-most
+                                                      show-message-p-fn)))
                    (when (plusp (length output))
                      (if wait
                          (immediate-print output)
