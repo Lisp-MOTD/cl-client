@@ -25,8 +25,9 @@ get the message of the day when you start your REPL, put this form in
 your init file after you've loaded Quicklisp:
 
     #+quicklisp
-    (when (ql:quickload :motd)
-      (motd:message-of-the-day))
+    (progn
+      (ql:quickload :motd)
+      (motd:motd))
 
 Note: as of this writing, this code was not yet available through
 Quicklisp.  I expect it should be soon.
